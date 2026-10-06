@@ -1,0 +1,82 @@
+# syntax=docker/dockerfile:1.7
+#
+# Build:
+#   docker build -f Dockerfile.gmoon -t gemoon-rindexer .
+#
+# Layer caching strategy:
+#   1. planner  — cargo-chef computes recipe.json (only Cargo.toml/Cargo.lock matter)
+#   2. node-deps — npm ci for graphql/ (cached by package.json/package-lock.json)
+#   3. builder  — `cargo chef cook` compiles ALL dependencies into a layer that is
+#                 re-used until a Cargo.toml/Cargo.lock changes; then only our own
+#                 crates (core + cli) are compiled on top of it.
+#   Cargo registry / git / pkg caches additionally live in BuildKit cache mounts,
+#   so even a Cargo.lock change does not re-download crates.
+#
+# Build args:
+#   FEATURES   cargo features for rindexer_cli (default matches `make prod_build`)
+#   RUSTFLAGS  default empty => portable binary. Pass
+#              --build-arg RUSTFLAGS='-C target-cpu=native' only if the image runs
+#              on the same CPU it was built on.
+
+ARG RUST_IMAGE=rust:1-slim-bookworm
+ARG RUNTIME_IMAGE=debian:bookworm-slim
+
+############################ chef: toolchain + system deps ############################
+FROM ${RUST_IMAGE} AS chef
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=true \
+    DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential cmake pkg-config libssl-dev libclang-dev clang \
+        curl git ca-certificates \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    cargo install cargo-chef --locked
+WORKDIR /app
+
+############################ planner: dependency recipe ###############################
+FROM chef AS planner
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
+
+############################ node-deps: graphql server deps ###########################
+FROM chef AS node-deps
+WORKDIR /app/graphql
+COPY graphql/package.json graphql/package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm npm ci
+
+############################ builder ###################################################
+FROM chef AS builder
+ARG FEATURES=jemalloc,reth
+ARG RUSTFLAGS=""
+ENV RUSTFLAGS=${RUSTFLAGS}
+
+# 1) compile dependencies only — this layer is cached until Cargo.toml/Cargo.lock change
+COPY --from=planner /app/recipe.json recipe.json
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    cargo chef cook --release -p rindexer_cli --features "${FEATURES}" --recipe-path recipe.json
+
+# 2) compile our own crates on top of the cached deps
+COPY . .
+COPY --from=node-deps /app/graphql/node_modules /app/graphql/node_modules
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/root/.pkg-cache \
+    cargo build --release -p rindexer_cli --features "${FEATURES}" \
+    && cp target/release/rindexer_cli /rindexer
+
+############################ runtime ###################################################
+FROM ${RUNTIME_IMAGE}
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+
+COPY --from=builder /rindexer /app/rindexer
+COPY ./project/rindexer.yaml /app/rindexer.yaml
+COPY ./abis /app/abis
+
+CMD ["/app/rindexer", "start", "-p", "/app/", "all"]
