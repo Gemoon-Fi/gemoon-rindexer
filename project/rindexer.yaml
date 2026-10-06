@@ -1,0 +1,82 @@
+name: franky
+project_type: no-code
+networks:
+  - name: sepolia
+    chain_id: 1337
+    rpc: https://anvil.devinside.tech
+    block_poll_frequency: 1000
+    max_block_range: 10
+graphql:
+  port: 3001
+storage:
+  postgres:
+    enabled: true
+contracts:
+  - name: GemoonUniswapHook
+    abi: ./abis/IHookManager.json
+    include_events:
+      - MemeSwapped
+      - FeeCharged
+      - FeesDistributed
+    details:
+      - network: sepolia
+        start_block: 11837460
+        address: 0x7358e169d75fa6F4284208AE3cbb05ee995D70cC
+  - name: UniswapV3SwapAdapter
+    abi: ./abis/IUniswapV3SwapAdapter.json
+    include_events:
+      - Swapped
+    details:
+      - network: sepolia
+        start_block: 11837460
+        address: 0xC22FCeAE3F814C0a3a5348a9B7578Cb55069353D
+  - name: GemoonVault
+    abi: ./abis/IVault.json
+    include_events:
+      - VaultRegistered
+      - FeesNotified
+      - FeesConverted
+      - ConversionFailed
+      - Staked
+      - Unstaked
+      - RewardPaid
+      - CreatorRewardPaid
+      - CreatorTransferred
+    details:
+      - network: sepolia
+        start_block: 11837460
+        address: 0x8FcB2ED22b7D0F50561bD756bDdb345D0C670113
+  - name: UniswapPoolManager
+    abi: ./abis/IPoolManager.json
+    include_events:
+      - Swap
+    details:
+      - network: sepolia
+        start_block: 11837460
+        address: 0xE03A1074c86CFeDd5C142C4F04F1a1536e203543
+  - name: GemoonController
+    abi: ./abis/IGemoonController.json
+    include_events:
+      - TokenCreated
+      - PoolCreated
+      - PositionCreated
+    details:
+      - network: sepolia
+        start_block: 11837460
+        address: 0x4a9F25C077e7487969f8dd60F92218FD6111bF85
+  - name: GemoonToken
+    abi: ./abis/IGemoonToken.json
+    include_events:
+      - Transfer
+      - Approval
+      - UpdateImage
+      - UpdateDescription
+    details:
+      - network: sepolia
+        start_block: 11837460
+        factory:
+          name: GemoonController
+          address: 0x4a9F25C077e7487969f8dd60F92218FD6111bF85
+          abi: ./abis/IGemoonController.json
+          event_name: TokenCreated
+          input_name: "tokenAddress"

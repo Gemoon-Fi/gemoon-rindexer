@@ -1,3 +1,20 @@
 .git
 Dockerfile
+Dockerfile.gmoon
 .env
+
+# build artifacts — never send these into the build context
+target
+**/target
+graphql/node_modules
+documentation/node_modules
+documentation/dist
+
+# let the image's pinned rustc be used instead of downloading `stable` on every build
+rust-toolchain.toml
+
+# local-only helpers, not needed inside the image
+docker-compose-postgres.yml
+start.sh
+project/*.sh
+project/*.json

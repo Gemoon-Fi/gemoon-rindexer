@@ -42,3 +42,5 @@ rindexer_rust_playground/generated_csv/*/*.csv
 node_modules
 core/resources/rindexer-graphql-*
 .worktrees/
+
+rindexer_cli

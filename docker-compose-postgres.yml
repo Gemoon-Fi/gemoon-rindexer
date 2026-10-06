@@ -1,0 +1,27 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ALtO7sltoOS1UDFP
+      POSTGRES_DB: postgres
+    ports:
+      - 0.0.0.0:5432:5432/tcp
+    volumes:
+      - pgdata2:/var/lib/postgresql/data
+    networks:
+      - default
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+networks:
+  default:
+    name: rindexer_default
+
+volumes:
+  pgdata2:
