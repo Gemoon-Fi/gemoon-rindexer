@@ -21,7 +21,7 @@ contracts:
     details:
       - network: robinhood
         start_block: 84313643
-        address: 0xB5e8dB4dB0Aa808d6843fA85D0935B92B0a870cc
+        address: 0xDD0449a3583e37f9dE16d7438DD9F929BB22b0CC
   - name: UniswapV3SwapAdapter
     abi: ./abis/IUniswapV3SwapAdapter.json
     include_events:
@@ -29,7 +29,7 @@ contracts:
     details:
       - network: robinhood
         start_block: 84313643
-        address: 0xF2FD42cF7De669D99bdd18fd98755Bfe35b5638f
+        address: 0x6eDC843C6aD7CBc08E4140FF0f123ab1E0C8AECA
   - name: GemoonVault
     abi: ./abis/IVault.json
     include_events:
@@ -71,6 +71,7 @@ contracts:
       - Approval
       - UpdateImage
       - UpdateDescription
+      - UpdateTokenURI
     details:
       - network: robinhood
         start_block: 84313643
@@ -95,7 +96,7 @@ contracts:
     details:
       - network: robinhood
         start_block: 84313643
-        address: 0xAb649F99d80dD721392c38D2e13fdD775f7d1b96
+        address: 0xE128144FECf094d244Be7b061674BEBF8BE78E5d
   # Цены токенизированных активов Robinhood в USDG по свопам в их Uniswap V3 пулах.
   # Изменение за 24ч / 7д / 30д считают SQL-функции из ./sql/asset_prices.sql.
   - name: AssetPrices
