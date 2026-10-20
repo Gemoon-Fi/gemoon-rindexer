@@ -2,7 +2,8 @@ services:
   rindexer:
     image: 193.124.67.84:8090/repository/ktm-docker/rindexer:1.0.0
     container_name: rindexer
-    restart: always
+    restart:
+      always
     ports:
       - 3001:3001/tcp
       - 8080:8080/tcp
@@ -11,10 +12,10 @@ services:
     environment:
       - PROJECT_PATH=/app/
       - DATABASE_URL=postgresql://postgres:ALtO7sltoOS1UDFP@postgres:5432/postgres
-    depends_on: 
-     - postgres
+    depends_on:
+      - postgres
     volumes:
-      - ./abis:/app/project/abis:ro
+      - ./abis:/app/abis:ro
       - ./rindexer.yaml:/app/rindexer.yaml
   postgres:
     image: postgres:16
