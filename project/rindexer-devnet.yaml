@@ -1,0 +1,313 @@
+name: franky
+project_type: no-code
+networks:
+  - name: robinhood
+    chain_id: 1488
+    rpc: https://rpc-testnet.gmoon.xyz
+    block_poll_frequency: 1000
+    max_block_range: 10
+graphql:
+  port: 3001
+storage:
+  postgres:
+    enabled: true
+contracts:
+  - name: GemoonUniswapHook
+    abi: ./abis/IHookManager.json
+    include_events:
+      - MemeSwapped
+      - FeeCharged
+      - FeesDistributed
+    details:
+      - network: robinhood
+        start_block: 84313665
+        address: 0xec289dAB70F59F3851c0d628B78aC842C0B770cc
+  - name: UniswapV3SwapAdapter
+    abi: ./abis/IUniswapV3SwapAdapter.json
+    include_events:
+      - Swapped
+    details:
+      - network: robinhood
+        start_block: 84313673
+        address: 0xD281C822294446E4F4A20BfEd0d3b6A2E9C207a9
+  - name: GemoonVault
+    abi: ./abis/IVault.json
+    include_events:
+      - VaultRegistered
+      - FeesNotified
+      - FeesConverted
+      - ConversionFailed
+      - Staked
+      - Unstaked
+      - RewardPaid
+      - CreatorRewardPaid
+      - CreatorTransferred
+    details:
+      - network: robinhood
+        start_block: 84313657
+        address: 0xE71baC4813C69C9dF1aFF12410cfd3734A09b45b
+  - name: UniswapPoolManager
+    abi: ./abis/IPoolManager.json
+    include_events:
+      - Swap
+    details:
+      - network: robinhood
+        start_block: 84313657
+        address: 0x8366a39CC670B4001A1121B8F6A443A643e40951
+  - name: GemoonController
+    abi: ./abis/IGemoonController.json
+    include_events:
+      - TokenCreated
+      - PoolCreated
+      - PositionCreated
+    details:
+      - network: robinhood
+        start_block: 84313661
+        address: 0x20b0428F95c312D371B88736bD84de99913c4358
+  - name: GemoonToken
+    abi: ./abis/IGemoonToken.json
+    include_events:
+      - Transfer
+      - Approval
+      - UpdateImage
+      - UpdateDescription
+      - UpdateTokenURI
+    details:
+      - network: robinhood
+        start_block: 84313661
+        factory:
+          name: GemoonController
+          address: 0x20b0428F95c312D371B88736bD84de99913c4358
+          abi: ./abis/IGemoonController.json
+          event_name: TokenCreated
+          input_name: "tokenAddress"
+  # Реферальные коды: регистрация кодов, привязка пользователей, закрепление мемов,
+  # начисления и выплаты рефереру.
+  - name: GemoonReferrals
+    abi: ./abis/IReferrals.json
+    include_events:
+      - CodeRegistered
+      - ReferrerSet
+      - TokenRegistered
+      - FeeReceived
+      - ReferralPaid
+      - ProtocolFeesWithdrawn
+      - RefShareUpdated
+    details:
+      - network: robinhood
+        start_block: 84313663
+        address: 0xdfb5F211a4f0F62eeaec246957Bc88f669f99d41
+  # Цены токенизированных активов Robinhood в USDG по свопам в их Uniswap V3 пулах.
+  # Изменение за 24ч / 7д / 30д считают SQL-функции из ./sql/asset_prices.sql.
+  - name: AssetPrices
+    abi: ./abis/IUniswapV3Pool.json
+    include_events:
+      - Swap
+    details:
+      - network: robinhood
+        start_block: 84313657
+        address:
+          - "0xAae0d815EE56e4092a5E5C2911E676Fea50B2d6D" # AAPL
+          - "0xaA34feA710a1A737840329051D81D3B0B7C564d5" # AMC
+          - "0x48D284A2A4d3DC1b3Da08231Fe44317e7e7Aa51f" # AMD
+          - "0x8AC92DA74AB5F3b1d024Dc1943Ad7e15Dc4179Ef" # AMZN
+          - "0xedb22516B14Eb2d1C86927Db373B0E8bF70F5cD1" # ASML
+          - "0x5B7C404f1d7d77F9f3885aB13d7764F8a173028c" # AVGO
+          - "0xc6517047b189c72D3bAa9eF37D1d28F27a63638a" # BA
+          - "0xa57ab582b310dd6f9e934EA1EEEa152741545E6A" # BABA
+          - "0xc424e56e816F148a8B30ccbde2128e04d21f51e9" # BB
+          - "0x1baD145C8F06444E0dF81c28257cd20231Bd1f16" # BE
+          - "0x0a2121A50A09eD0796ae81F9c53fF9398355a398" # COST
+          - "0x654E4143e82a5824445Ade0824351C2A9ACD95a8" # CRCL
+          - "0xc30c89cB7815A1488b7998D15eEC73961707Fc5a" # DELL
+          - "0x31a89afd92F9397465649AD03226c52292fc1ae5" # DJT
+          - "0x4dbAC19E895322ac5b93abad9008691632bFFC05" # F
+          - "0xca5904C0a9d42F0Ec1Bf760FDf779907877144fD" # FIG
+          - "0x7A6A053eCCf1446A2633E05aA6D40D09381997ec" # GLD
+          - "0xC67C2D200E0b7E5D99F4CFBede8CB09B48892f2c" # GLXY
+          - "0xE9713f453aDB9245B19559790c96F470a18F2fDF" # GME
+          - "0x34D0dC122CF9A8Eb296fC5e0D3A233625D7d19b7" # GOOGL
+          - "0xC8C90d3a1c1a24967E773ac2aD0d456BA3E31F64" # HIMS
+          - "0x8cD848ce18b829C5c769AFf27164078bB52e0E97" # IBM
+          - "0x2e5a92f5013a64661A49312111be2e8aBd33F56a" # INTC
+          - "0x7F0aCE18D1dCEd47063CF26e649bc8AB14D09e67" # JNJ
+          - "0xF212D02146a897F5F686E9d629F6A73da534324a" # LLY
+          - "0x54f160Bea60EC5207918C539d86E0b906b4DA297" # LMT
+          - "0x0F4227D27082B3BCA6818381b9ea6460275e49f4" # LULU
+          - "0x107a7Cb40d8665360ba10E59471Af06150A50922" # META
+          - "0xB40196272A6d2EB5edF6d93bc4DC39856AD95E0E" # MRNA
+          - "0xeb60bCD1D920ad6E102690CCFC6fB488899E1510" # MSFT
+          - "0x17578C0e0D15da44f31677263114F71aE76653EA" # MSTR
+          - "0xd057B1Bc54917855BBee58eAd58647f47caB35E5" # MU
+          - "0xA9Caebb1b2fB2b954F192572b309aEf1cAf6a330" # NET
+          - "0x59895C0302F41aEaa129D2fa2442CEc01E7eF45E" # NFLX
+          - "0xb6d047637151f6De1d02028acdd187Aa9cb7AFE3" # NU
+          - "0xd4EB21209C4D6093f80B5b84f5C45cc093EA14a3" # NVDA
+          - "0xC7d573Fcda6D2107C97fb582ae18411F9Db32E7f" # PFE
+          - "0x851680416A4f4E1c463d45171d61ACDdBc8554c0" # PLTR
+          - "0xD60A5d14dB690B7Afad71F76B108071D7175597d" # QQQ
+          - "0x227Bbce9A81B3694b01754298a983Be3F9E44A93" # QUBT
+          - "0x2ef5945cd5664876b6481FdacFaA2942995a4DA8" # RBLX
+          - "0x64710a70839585Af718e1B1FAEf9E7f1665F1116" # RCAT
+          - "0xa8744E76aED23B05F0126335E7BD38f7935D19fe" # RDDT
+          - "0xb30A75B200D98A600a3766869344928E35823E23" # RIVN
+          - "0xfAb520051f96F4D2a32c22B6a3dD7fFfdf231bFe" # SGOV
+          - "0x5F2a5025feb93a4C44DA4E3B37e4fD3Fb0ab5171" # SKHY
+          - "0x8cB787e6c315D464775289BaD00FDD67d53Ecb3D" # SLV
+          - "0x0EbD4650C9e641E9745b5A508A2D46935DFE753E" # SNAP
+          - "0xA1e1C9519cD5ae47e9A935645E1A7b935b944559" # SNDK
+          - "0xc61284332117c3FB23A2A56cceFFD07F7aF60029" # SPCX
+          - "0xa7Bb1AC63BBaB0C44316E6c8C455213441689167" # SPY
+          - "0xf4ACdAEEB7022862A763C9B1B885e11191c889E3" # TSLA
+          - "0x07e8Ea83D4C1340774c8965125e26e12bf943bf1" # TSM
+          - "0xD9Ab4b7fAe6DC2f7020134Ec744A8F53Ef3E5E24" # TTWO
+          - "0x3Ab74C45DceCC6A62898204Dd42143a816B44CB1" # UPS
+          - "0x04391780F519B7d3ba59c9590459D76e23d225C4" # USAR
+          - "0x02175608F1b5E6b5ed221cCFdC7Be197D111D915" # USO
+          - "0xb78DD1A97fa544c65d7D1f12453EcaAF1e05c36d" # VTI
+          - "0x9664D869540E9D0a76f12C6623946C6D5d201e09" # cbBTC
+          - "0x52e65B17fB6E5BA00Ed806f37Afcd2DaA50271Ca" # WETH
+          - "0x7A192E71564ec66eE0763e328a3Ac274942dE4e1" # PONS
+          - "0x4B0c312fFbB068F6a0bEa128759E35d94B94D0E1" # CASHCAT
+          - "0xe547c18f46Db55AB788343bcC503F9CF0bd7d564" # AI
+          - "0x75Ee717303F5212CC1bE3C52ea21f7128954902e" # ORBIO
+    tables:
+      # Одна строка на пул: текущая цена после последнего свопа.
+      # price хранится как целое с 18 знаками после запятой (1 актив = price / 1e18 USDG).
+      # Формула зависит от того, каким по счёту токеном актив стоит в пуле и сколько у него
+      # знаков после запятой, поэтому операций три. Условия взаимоисключающие, так что на
+      # одно событие срабатывает ровно одна. sqrtPriceX96 < 2^96 значит, что актив
+      # (18 знаков) стоит token0 против USDG (6 знаков); исключение одно — cbBTC (8 знаков).
+      - name: prices
+        timestamp: true
+        columns:
+          - name: pool
+            type: address
+          - name: asset
+            type: address
+          - name: price
+            type: uint256
+          - name: sqrt_price_x96
+            type: uint256
+          - name: swap_count
+            type: uint64
+            default: "0"
+        events:
+          - event: Swap
+            operations:
+              # актив = token0 (18 знаков): price = sqrtP² / 2^192 * 10^(18-6) * 1e18
+              - type: upsert
+                where:
+                  pool: $rindexer_contract_address
+                if: "$rindexer_contract_address != 0x9664D869540E9D0a76f12C6623946C6D5d201e09 && $sqrtPriceX96 < 79228162514264337593543950336"
+                set:
+                  - column: asset
+                    action: set
+                    value: $call_static($rindexer_contract_address, "token0()")
+                  - column: price
+                    action: set
+                    value: ($sqrtPriceX96 * $sqrtPriceX96 / 2 ^ 96) * 10 ^ 30 / 2 ^ 96
+                  - column: sqrt_price_x96
+                    action: set
+                    value: $sqrtPriceX96
+                  - column: swap_count
+                    action: increment
+              # актив = token1 (18 знаков): price = 2^192 / sqrtP² * 10^(18-6) * 1e18
+              - type: upsert
+                where:
+                  pool: $rindexer_contract_address
+                if: "$rindexer_contract_address != 0x9664D869540E9D0a76f12C6623946C6D5d201e09 && $sqrtPriceX96 >= 79228162514264337593543950336"
+                set:
+                  - column: asset
+                    action: set
+                    value: $call_static($rindexer_contract_address, "token1()")
+                  - column: price
+                    action: set
+                    value: (2 ^ 96 * 10 ^ 30 / $sqrtPriceX96) * 2 ^ 96 / $sqrtPriceX96
+                  - column: sqrt_price_x96
+                    action: set
+                    value: $sqrtPriceX96
+                  - column: swap_count
+                    action: increment
+              # cbBTC = token1 (8 знаков): price = 2^192 / sqrtP² * 10^(8-6) * 1e18
+              - type: upsert
+                where:
+                  pool: $rindexer_contract_address
+                if: "$rindexer_contract_address == 0x9664D869540E9D0a76f12C6623946C6D5d201e09"
+                set:
+                  - column: asset
+                    action: set
+                    value: $call_static($rindexer_contract_address, "token1()")
+                  - column: price
+                    action: set
+                    value: (2 ^ 96 * 10 ^ 20 / $sqrtPriceX96) * 2 ^ 96 / $sqrtPriceX96
+                  - column: sqrt_price_x96
+                    action: set
+                    value: $sqrtPriceX96
+                  - column: swap_count
+                    action: increment
+      # Часовые свечи: одна строка на (пул, час). hour = unix_time / 3600.
+      # По ним SQL-функции находят цену 24ч / 7д / 30д назад.
+      - name: prices_hourly
+        columns:
+          - name: pool
+            type: address
+          - name: hour
+            type: uint64
+          - name: close
+            type: uint256
+          - name: high
+            type: uint256
+          - name: low
+            type: uint256
+        events:
+          - event: Swap
+            operations:
+              # актив = token0 (18 знаков)
+              - type: upsert
+                where:
+                  pool: $rindexer_contract_address
+                  hour: $rindexer_block_timestamp / 3600
+                if: "$rindexer_contract_address != 0x9664D869540E9D0a76f12C6623946C6D5d201e09 && $sqrtPriceX96 < 79228162514264337593543950336"
+                set:
+                  - column: close
+                    action: set
+                    value: ($sqrtPriceX96 * $sqrtPriceX96 / 2 ^ 96) * 10 ^ 30 / 2 ^ 96
+                  - column: high
+                    action: max
+                    value: ($sqrtPriceX96 * $sqrtPriceX96 / 2 ^ 96) * 10 ^ 30 / 2 ^ 96
+                  - column: low
+                    action: min
+                    value: ($sqrtPriceX96 * $sqrtPriceX96 / 2 ^ 96) * 10 ^ 30 / 2 ^ 96
+              # актив = token1 (18 знаков)
+              - type: upsert
+                where:
+                  pool: $rindexer_contract_address
+                  hour: $rindexer_block_timestamp / 3600
+                if: "$rindexer_contract_address != 0x9664D869540E9D0a76f12C6623946C6D5d201e09 && $sqrtPriceX96 >= 79228162514264337593543950336"
+                set:
+                  - column: close
+                    action: set
+                    value: (2 ^ 96 * 10 ^ 30 / $sqrtPriceX96) * 2 ^ 96 / $sqrtPriceX96
+                  - column: high
+                    action: max
+                    value: (2 ^ 96 * 10 ^ 30 / $sqrtPriceX96) * 2 ^ 96 / $sqrtPriceX96
+                  - column: low
+                    action: min
+                    value: (2 ^ 96 * 10 ^ 30 / $sqrtPriceX96) * 2 ^ 96 / $sqrtPriceX96
+              # cbBTC = token1 (8 знаков)
+              - type: upsert
+                where:
+                  pool: $rindexer_contract_address
+                  hour: $rindexer_block_timestamp / 3600
+                if: "$rindexer_contract_address == 0x9664D869540E9D0a76f12C6623946C6D5d201e09"
+                set:
+                  - column: close
+                    action: set
+                    value: (2 ^ 96 * 10 ^ 20 / $sqrtPriceX96) * 2 ^ 96 / $sqrtPriceX96
+                  - column: high
+                    action: max
+                    value: (2 ^ 96 * 10 ^ 20 / $sqrtPriceX96) * 2 ^ 96 / $sqrtPriceX96
+                  - column: low
+                    action: min
+                    value: (2 ^ 96 * 10 ^ 20 / $sqrtPriceX96) * 2 ^ 96 / $sqrtPriceX96
