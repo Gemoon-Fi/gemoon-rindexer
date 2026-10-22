@@ -1,19 +1,21 @@
 services:
   rindexer:
-    image: nexus-ktm.devinside.tech/repository/ktm-docker/rindexer:1.0.0
+    image: nexus-ktm.devinside.tech/repository/ktm-docker/rindexer:1.0.1
     container_name: rindexer
     restart: always
     ports:
       - 3001:3001/tcp
-      - 11.0.0.100:8080:8080/tcp
+      - 11.0.0.100:8080:8080/tcp #prometheus metrics
     networks:
       - default
     environment:
       - PROJECT_PATH=/app/
       - DATABASE_URL=postgresql://postgres:ALtO7sltoOS1UDFP@postgres:5432/postgres
       - TZ=Europe/Moscow
+      - RUST_LOG=info,rindexer=debug
     depends_on:
-     - postgres
+      postgres:
+        condition: service_healthy
     volumes:
       - ./abis:/app/abis:ro
       - ./rindexer.yaml:/app/rindexer.yaml
@@ -27,7 +29,7 @@ services:
       POSTGRES_DB: postgres
       TZ: Europe/Moscow
     ports:
-      - 0.0.0.0:5432:5432/tcp
+      - 10.88.0.1:5432:5432/tcp
     volumes:
       - pgdata2:/var/lib/postgresql/data
     networks:
@@ -44,3 +46,4 @@ networks:
 
 volumes:
   pgdata2:
+

@@ -5,6 +5,8 @@
 
 ### Bug fixes
 -------------------------------------------------
+- fix: **custom-table reorg journal for `set` / `max` / `min`** — `uint256` / `int256` values (including computed expressions) were written to `rindexer_internal.derived_op_log` as `U256Numeric(…)`, failing the insert with `Failed to journal non-reversible ops: invalid input syntax for type numeric` and leaving those columns unrecoverable after a reorg. Values are now plain decimals; `set` on non-numeric columns (e.g. `address`, `string`) is no longer journaled (it could fail the whole batch) and is not recalculated on reorg; `where_key` is now written without quotes (`pool=0xab…`) so reorg recalculation matches the derived rows
+- fix: **RPC retries are now logged** — every retried RPC request logs a `WARN` line `RPC request failed, retrying - error: …` with the provider's error. Previously retries were silent (alloy traces them only), so a provider rejecting every request with a retryable error — e.g. `-32005` when `max_block_range` exceeds the plan's `eth_getLogs` block limit — made indexing hang for hours with nothing in the logs or metrics
 
 ### Features
 -------------------------------------------------

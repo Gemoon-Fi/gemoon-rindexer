@@ -4,8 +4,8 @@ networks:
   - name: robinhood
     chain_id: 4663
     rpc: https://api-robinhood-mainnet-archive.n.dwellir.com/97881394-6d36-4d50-b555-8cd636523d0f
-    block_poll_frequency: 1000
-    max_block_range: 10
+    block_poll_frequency: 6000
+    max_block_range: 490 # dwellir max 500 blocks
 graphql:
   port: 3001
 storage:

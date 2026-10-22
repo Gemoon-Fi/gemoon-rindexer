@@ -26,8 +26,8 @@ use alloy::{
             reqwest::{header::HeaderMap, Client, Error as ReqwestError},
             Http,
         },
-        layers::RetryBackoffLayer,
-        RpcError, TransportErrorKind,
+        layers::{RateLimitRetryPolicy, RetryBackoffLayer, RetryPolicy},
+        RpcError, TransportError, TransportErrorKind,
     },
 };
 use alloy_chains::{Chain, NamedChain};
@@ -44,8 +44,39 @@ use std::{
 use thiserror::Error;
 use tokio::sync::{broadcast::Sender, Mutex, Semaphore};
 use tokio::task::JoinError;
-use tracing::{debug, debug_span, error, Instrument};
+use tracing::{debug, debug_span, error, warn, Instrument};
 use url::Url;
+
+/// alloy's default retry policy, plus a warning on every retry. alloy only traces retries,
+/// and JSON-RPC error responses (e.g. `-32005` for a provider's block-range limit) never
+/// reach `RpcLoggingLayer` as errors, so without this a request retried for hours is silent.
+#[derive(Debug, Clone, Copy, Default)]
+struct WarnOnRetryPolicy(RateLimitRetryPolicy);
+
+impl RetryPolicy for WarnOnRetryPolicy {
+    fn should_retry(&self, error: &TransportError) -> bool {
+        let retry = self.0.should_retry(error);
+        if retry {
+            warn!("RPC request failed, retrying - error: {}", error);
+        }
+        retry
+    }
+
+    fn backoff_hint(&self, error: &TransportError) -> Option<Duration> {
+        self.0.backoff_hint(error)
+    }
+}
+
+fn build_retry_layer(
+    compute_units_per_second: Option<u64>,
+) -> RetryBackoffLayer<WarnOnRetryPolicy> {
+    RetryBackoffLayer::new_with_policy(
+        5000,
+        1000,
+        compute_units_per_second.unwrap_or(660),
+        WarnOnRetryPolicy::default(),
+    )
+}
 
 use async_trait::async_trait;
 
@@ -1167,8 +1198,7 @@ pub async fn create_client(
 
     let (client, provider) = if rpc_url.ends_with(".ipc") {
         let ipc = IpcConnect::new(rpc_url.to_string());
-        let retry_layer =
-            RetryBackoffLayer::new(5000, 1000, compute_units_per_second.unwrap_or(660));
+        let retry_layer = build_retry_layer(compute_units_per_second);
         let logging_layer = RpcLoggingLayer::new(chain_id, rpc_url.to_string());
 
         let rpc_client =
@@ -1195,8 +1225,7 @@ pub async fn create_client(
 
         let logging_layer = RpcLoggingLayer::new(chain_id, rpc_url.to_string());
         let http = Http::with_client(client_with_auth, rpc_url);
-        let retry_layer =
-            RetryBackoffLayer::new(5000, 1000, compute_units_per_second.unwrap_or(660));
+        let retry_layer = build_retry_layer(compute_units_per_second);
         let rpc_client =
             RpcClient::builder().layer(retry_layer).layer(logging_layer).transport(http, false);
         let provider =

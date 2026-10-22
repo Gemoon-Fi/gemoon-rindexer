@@ -4727,7 +4727,7 @@ fn collect_journal_values(
         let mut where_clauses: Vec<String> = Vec::new();
         for col in &where_keys {
             if let Some(v) = row.columns.get(col.as_str()) {
-                where_clauses.push(format!("{}={}", col, format_wrapper_for_sql(v)));
+                where_clauses.push(format!("{}={}", col, journal_where_value(v)));
             }
         }
         if where_clauses.is_empty() {
@@ -4736,9 +4736,12 @@ fn collect_journal_values(
         let where_key_str = where_clauses.join(",").replace('\'', escape_quote);
 
         for sc in &non_reversible {
-            let value_str = match row.columns.get(sc.column.as_str()) {
-                Some(v) => format_wrapper_for_sql(v),
-                None => continue,
+            // `derived_op_log.value` is numeric: a non-numeric value (address, string, ...)
+            // would fail the whole batched INSERT, so it is not journaled.
+            let Some(value_str) =
+                row.columns.get(sc.column.as_str()).and_then(journal_numeric_value)
+            else {
+                continue;
             };
 
             value_tuples.push(format!(
@@ -4860,33 +4863,127 @@ async fn journal_non_reversible_ops_clickhouse(
 }
 
 /// Format an EthereumSqlTypeWrapper as a SQL literal for WHERE clauses.
-fn format_wrapper_for_sql(w: &EthereumSqlTypeWrapper) -> String {
+/// Decimal text of a numeric value for `derived_op_log.value`, or `None` when the value is
+/// not numeric (or is a NULL numeric) and cannot be stored in that column.
+fn journal_numeric_value(w: &EthereumSqlTypeWrapper) -> Option<String> {
+    use EthereumSqlTypeWrapper as W;
+    let text = match w {
+        W::U8(n) => n.to_string(),
+        W::U16(n) => n.to_string(),
+        W::U32(n) => n.to_string(),
+        W::U64(n) | W::U64Nullable(n) | W::U64BigInt(n) => n.to_string(),
+        W::U128(n) => n.to_string(),
+        W::U256(n)
+        | W::U256Numeric(n)
+        | W::U256Nullable(n)
+        | W::U256Bytes(n)
+        | W::U256BytesNullable(n) => n.to_string(),
+        W::U256NumericNullable(n) => (*n)?.to_string(),
+        W::U512(n) => n.to_string(),
+        W::I8(n) => n.to_string(),
+        W::I16(n) => n.to_string(),
+        W::I32(n) => n.to_string(),
+        W::I64(n) => n.to_string(),
+        W::I128(n) => n.to_string(),
+        W::I256(n)
+        | W::I256Numeric(n)
+        | W::I256Nullable(n)
+        | W::I256Bytes(n)
+        | W::I256BytesNullable(n) => n.to_string(),
+        _ => return None,
+    };
+    Some(text)
+}
+
+/// Text of a WHERE value inside the journal's `where_key`. Must match how the reorg
+/// recalculation renders the derived table's column (`col::TEXT` in Postgres), so values
+/// are written bare: `pool=0xab…`, not `pool='0xab…'`.
+fn journal_where_value(w: &EthereumSqlTypeWrapper) -> String {
+    use EthereumSqlTypeWrapper as W;
     match w {
-        EthereumSqlTypeWrapper::String(s) => format!("'{}'", s.replace('\'', "''")),
-        EthereumSqlTypeWrapper::Address(a) => format!("'{:#x}'", a),
-        EthereumSqlTypeWrapper::Bool(b) => format!("{}", b),
-        EthereumSqlTypeWrapper::U8(n) => format!("{}", n),
-        EthereumSqlTypeWrapper::U16(n) => format!("{}", n),
-        EthereumSqlTypeWrapper::U32(n) => format!("{}", n),
-        EthereumSqlTypeWrapper::U64(n) => format!("{}", n),
-        EthereumSqlTypeWrapper::U64BigInt(n) => format!("{}", n),
-        EthereumSqlTypeWrapper::U128(n) => format!("{}", n),
-        EthereumSqlTypeWrapper::U256(n) => format!("{}", n),
-        EthereumSqlTypeWrapper::I8(n) => format!("{}", n),
-        EthereumSqlTypeWrapper::I16(n) => format!("{}", n),
-        EthereumSqlTypeWrapper::I32(n) => format!("{}", n),
-        EthereumSqlTypeWrapper::I64(n) => format!("{}", n),
-        EthereumSqlTypeWrapper::I128(n) => format!("{}", n),
-        EthereumSqlTypeWrapper::I256(n) => format!("{}", n),
-        EthereumSqlTypeWrapper::Bytes(b) => format!("'\\x{}'", hex::encode(b)),
-        // Fallback: use Debug formatting (safe for SQL numerics)
-        other => format!("'{:?}'", other),
+        W::String(s)
+        | W::StringVarchar(s)
+        | W::StringChar(s)
+        | W::StringNullable(s)
+        | W::StringVarcharNullable(s)
+        | W::StringCharNullable(s) => s.clone(),
+        W::Address(a) | W::AddressNullable(a) => format!("{a:#x}"),
+        W::Bool(b) => b.to_string(),
+        W::Bytes(b) => format!("\\x{}", hex::encode(b)),
+        other => journal_numeric_value(other).unwrap_or_else(|| format!("{other:?}")),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_collect_journal_values_numeric_and_bare_where_key() {
+        let operation: TableOperation = serde_yaml::from_str(
+            r#"
+type: upsert
+where:
+  pool: $rindexer_contract_address
+set:
+  - column: asset
+    action: set
+    value: $token0
+  - column: price
+    action: set
+    value: $price
+  - column: high
+    action: max
+    value: $price
+"#,
+        )
+        .unwrap();
+        let pool = Address::with_last_byte(0xab);
+        let price = U256::from_str_radix("2403381835513985770312", 10).unwrap();
+        let row = TableRowData {
+            columns: HashMap::from([
+                ("pool".to_string(), EthereumSqlTypeWrapper::Address(pool)),
+                ("asset".to_string(), EthereumSqlTypeWrapper::Address(Address::with_last_byte(1))),
+                ("price".to_string(), EthereumSqlTypeWrapper::U256Numeric(price)),
+                ("high".to_string(), EthereumSqlTypeWrapper::U256Numeric(price)),
+                ("rindexer_block_number".to_string(), EthereumSqlTypeWrapper::U64BigInt(7)),
+                ("tx_index".to_string(), EthereumSqlTypeWrapper::U64(2)),
+                ("log_index".to_string(), EthereumSqlTypeWrapper::U64(3)),
+            ]),
+            network: "robinhood".to_string(),
+        };
+
+        let values = collect_journal_values("s.prices", &operation, &[row], "''");
+
+        // `asset` is an address and is not journaled; numerics are plain decimals and the
+        // where_key holds the bare lowercase address, as the reorg join renders it.
+        let where_key = format!("pool={pool:#x}");
+        let mut expected: Vec<String> = ["price", "high"]
+            .iter()
+            .map(|column| {
+                format!(
+                    "('s.prices', 'robinhood', '{where_key}', '{column}', 2403381835513985770312, 7, 2, 3)"
+                )
+            })
+            .collect();
+        let mut values = values;
+        values.sort();
+        expected.sort();
+        assert_eq!(values, expected);
+    }
+
+    #[test]
+    fn test_journal_numeric_value() {
+        use EthereumSqlTypeWrapper as W;
+        assert_eq!(
+            journal_numeric_value(&W::U256Numeric(U256::from(42u64))).as_deref(),
+            Some("42")
+        );
+        assert_eq!(journal_numeric_value(&W::I256Numeric(I256::MINUS_ONE)).as_deref(), Some("-1"));
+        assert_eq!(journal_numeric_value(&W::U256NumericNullable(None)), None);
+        assert_eq!(journal_numeric_value(&W::Address(Address::ZERO)), None);
+        assert_eq!(journal_numeric_value(&W::String("1".to_string())), None);
+    }
 
     #[test]
     fn test_evaluate_filter_equals() {

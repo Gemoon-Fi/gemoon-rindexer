@@ -648,6 +648,28 @@ fn build_derived_tables_for_event(
                     if set_col.action.reverse().is_some() {
                         continue; // handled by rollback_ops
                     }
+                    // The journal's `value` column is numeric, so only integer columns are
+                    // journaled and can be recalculated.
+                    let journaled = derived_column_types.get(&set_col.column).is_none_or(|ty| {
+                        matches!(
+                            ty,
+                            ColumnType::Uint8
+                                | ColumnType::Uint16
+                                | ColumnType::Uint32
+                                | ColumnType::Uint64
+                                | ColumnType::Uint128
+                                | ColumnType::Uint256
+                                | ColumnType::Int8
+                                | ColumnType::Int16
+                                | ColumnType::Int32
+                                | ColumnType::Int64
+                                | ColumnType::Int128
+                                | ColumnType::Int256
+                        )
+                    });
+                    if !journaled {
+                        continue;
+                    }
                     if !journal_columns.iter().any(|jc| jc.derived_column == set_col.column) {
                         journal_columns.push(DerivedColumnJournal::try_new(
                             set_col.column.clone(),
